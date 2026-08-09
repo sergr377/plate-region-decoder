@@ -53,7 +53,19 @@ export default function App() {
       </View>
 
       <View style={[styles.inputBox, { height: inputHeight }]}>
-        <Text style={styles.inputText}>{code}</Text>
+        <View style={styles.inputRow}>
+          {Array.from({ length: MAX_LENGTH }).map((_, i) => {
+            const filled = i < code.length;
+            return (
+              <Text
+                key={i}
+                style={[styles.inputChar, !filled && styles.inputCharPlaceholder]}
+              >
+                {filled ? code[i] : '•'}
+              </Text>
+            );
+          })}
+        </View>
       </View>
 
       <View style={[styles.keypad, { height: keypadHeight }]}>
@@ -125,18 +137,28 @@ const styles = StyleSheet.create({
   },
   inputBox: {
     marginHorizontal: 24,
-    marginVertical: 12,
+    marginVertical: 10,
     borderWidth: 2,
     borderColor: '#111',
-    borderRadius: 16,
-    alignItems: 'center',
+    borderRadius: 14,
     justifyContent: 'center',
   },
-  inputText: {
-    fontSize: 24,
-    fontWeight: '600',
-    letterSpacing: 10,
+  inputRow: {
+    flexDirection: 'row',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 28,
+  },
+  inputChar: {
+    width: 40,
+    fontSize: 36,
+    fontWeight: '700',
+    textAlign: 'center',
     color: '#111',
+  },
+  inputCharPlaceholder: {
+    opacity: 0.25,
   },
   keypad: {
     paddingHorizontal: 12,
