@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { REGIONS } from './regions';
+import RussiaMap from './RussiaMap';
 
 const MAX_LENGTH = 3;
 const KEYPAD_ROWS = [
@@ -18,9 +19,10 @@ const KEYPAD_ROWS = [
   ['', '0', 'del'],
 ];
 
-function getResultText(code) {
-  if (code.length < 2) return 'Введите код';
-  return REGIONS[code] ?? 'Не найдено';
+function getResult(code) {
+  if (code.length < 2) return { text: 'Введите код', region: null };
+  const region = REGIONS[code] ?? null;
+  return { text: region ?? 'Не найдено', region };
 }
 
 export default function App() {
@@ -37,19 +39,24 @@ export default function App() {
     setCode('');
   };
 
-  const resultText = getResultText(code);
+  const { text: resultText, region } = getResult(code);
   const isEmptyState = code.length < 2;
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.resultBox}>
-        <Text
-          style={[styles.resultText, isEmptyState && styles.resultTextMuted]}
-          numberOfLines={2}
-          adjustsFontSizeToFit
-        >
-          {resultText}
-        </Text>
+        <View style={styles.mapWrapper}>
+          <RussiaMap highlightedName={region} />
+        </View>
+        <View style={styles.resultTextWrapper}>
+          <Text
+            style={[styles.resultText, isEmptyState && styles.resultTextMuted]}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+          >
+            {resultText}
+          </Text>
+        </View>
       </View>
 
       <View style={[styles.inputBox, { height: inputHeight }]}>
@@ -119,11 +126,21 @@ const styles = StyleSheet.create({
   },
   resultBox: {
     flex: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  mapWrapper: {
+    flex: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  resultTextWrapper: {
+    flex: 3,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   resultText: {
     fontSize: 32,
