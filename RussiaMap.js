@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 import mapData from './russiaMapData.json';
@@ -100,36 +100,36 @@ function targetFor(region) {
 }
 
 export default function RussiaMap({ highlightedName }) {
-  // progress drives the AnimatedG's `transform` prop directly via
+  // Each of these drives the AnimatedG's `transform` prop directly via
   // setNativeProps, so a zoom animation never triggers a React re-render
   // (and never re-diffs the region Path list) on any of its frames.
-  const progress = useRef(new Animated.Value(0)).current;
-  const currentTargetRef = useRef(IDENTITY);
-  const [bounds, setBounds] = useState({ from: IDENTITY, to: IDENTITY });
+  // react-native-svg's native side expects `transform` as a plain
+  // [a, b, c, d, tx, ty] matrix — never a string — once it's set outside
+  // React's normal render/commit cycle, so we animate the matrix
+  // components directly instead of interpolating an SVG transform string.
+  const scaleAnim = useRef(new Animated.Value(IDENTITY.scale)).current;
+  const txAnim = useRef(new Animated.Value(IDENTITY.tx)).current;
+  const tyAnim = useRef(new Animated.Value(IDENTITY.ty)).current;
 
   useEffect(() => {
     const region = regions.find((r) => r.name === highlightedName);
     const to = targetFor(region);
-    const from = currentTargetRef.current;
-    currentTargetRef.current = to;
-
-    setBounds({ from, to });
-    progress.setValue(0);
-    Animated.timing(progress, {
-      toValue: 1,
+    const config = {
       duration: ZOOM_DURATION,
       easing: Easing.out(Easing.quad),
       useNativeDriver: false,
-    }).start();
-  }, [highlightedName, progress]);
+    };
+    Animated.parallel([
+      Animated.timing(scaleAnim, { toValue: to.scale, ...config }),
+      Animated.timing(txAnim, { toValue: to.tx, ...config }),
+      Animated.timing(tyAnim, { toValue: to.ty, ...config }),
+    ]).start();
+  }, [highlightedName, scaleAnim, txAnim, tyAnim]);
 
-  const transform = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [
-      `translate(${bounds.from.tx},${bounds.from.ty}) scale(${bounds.from.scale})`,
-      `translate(${bounds.to.tx},${bounds.to.ty}) scale(${bounds.to.scale})`,
-    ],
-  });
+  const transform = useMemo(
+    () => [scaleAnim, 0, 0, scaleAnim, txAnim, tyAnim],
+    [scaleAnim, txAnim, tyAnim]
+  );
 
   // Static across the component's lifetime: never depends on highlightedName,
   // so it's built once and never re-diffed on highlight or zoom changes.
