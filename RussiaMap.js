@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 import mapData from './russiaMapData.json';
 
 const { width, height, regions } = mapData;
+
+const AnimatedG = Animated.createAnimatedComponent(G);
 
 const BORDER_COLOR = '#111';
 const FILL_COLOR = '#eef1f3';
@@ -98,29 +100,20 @@ function targetFor(region) {
 }
 
 export default function RussiaMap({ highlightedName }) {
-  const progress = useRef(new Animated.Value(1)).current;
-  const currentRef = useRef(IDENTITY);
-  const fromRef = useRef(IDENTITY);
-  const toRef = useRef(IDENTITY);
-  const [transformStr, setTransformStr] = useState('translate(0,0) scale(1)');
-
-  useEffect(() => {
-    const id = progress.addListener(({ value }) => {
-      const f = fromRef.current;
-      const t = toRef.current;
-      const scale = f.scale + (t.scale - f.scale) * value;
-      const tx = f.tx + (t.tx - f.tx) * value;
-      const ty = f.ty + (t.ty - f.ty) * value;
-      currentRef.current = { scale, tx, ty };
-      setTransformStr(`translate(${tx},${ty}) scale(${scale})`);
-    });
-    return () => progress.removeListener(id);
-  }, [progress]);
+  // progress drives the AnimatedG's `transform` prop directly via
+  // setNativeProps, so a zoom animation never triggers a React re-render
+  // (and never re-diffs the region Path list) on any of its frames.
+  const progress = useRef(new Animated.Value(0)).current;
+  const currentTargetRef = useRef(IDENTITY);
+  const [bounds, setBounds] = useState({ from: IDENTITY, to: IDENTITY });
 
   useEffect(() => {
     const region = regions.find((r) => r.name === highlightedName);
-    fromRef.current = currentRef.current;
-    toRef.current = targetFor(region);
+    const to = targetFor(region);
+    const from = currentTargetRef.current;
+    currentTargetRef.current = to;
+
+    setBounds({ from, to });
     progress.setValue(0);
     Animated.timing(progress, {
       toValue: 1,
@@ -130,34 +123,58 @@ export default function RussiaMap({ highlightedName }) {
     }).start();
   }, [highlightedName, progress]);
 
+  const transform = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      `translate(${bounds.from.tx},${bounds.from.ty}) scale(${bounds.from.scale})`,
+      `translate(${bounds.to.tx},${bounds.to.ty}) scale(${bounds.to.scale})`,
+    ],
+  });
+
+  // Static across the component's lifetime: never depends on highlightedName,
+  // so it's built once and never re-diffed on highlight or zoom changes.
+  const regionBorders = useMemo(
+    () =>
+      regions.map((r) => (
+        <Path
+          key={`border-${r.name}`}
+          d={r.d}
+          fill={BORDER_COLOR}
+          stroke={BORDER_COLOR}
+          strokeWidth={3}
+          strokeLinejoin="round"
+        />
+      )),
+    []
+  );
+
+  // Depends only on highlightedName, so it's recomputed once per code entry
+  // (not per animation frame).
+  const regionFills = useMemo(
+    () =>
+      regions.map((r) => {
+        const isHighlighted = r.name === highlightedName;
+        return (
+          <Path
+            key={`fill-${r.name}`}
+            d={r.d}
+            fill={isHighlighted ? HIGHLIGHT_COLOR : FILL_COLOR}
+            stroke={REGION_STROKE}
+            strokeWidth={0.7}
+            strokeDasharray="2,2"
+            strokeOpacity={0.5}
+          />
+        );
+      }),
+    [highlightedName]
+  );
+
   return (
     <Svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
-      <G transform={transformStr}>
-        {regions.map((r) => (
-          <Path
-            key={`border-${r.name}`}
-            d={r.d}
-            fill={BORDER_COLOR}
-            stroke={BORDER_COLOR}
-            strokeWidth={3}
-            strokeLinejoin="round"
-          />
-        ))}
-        {regions.map((r) => {
-          const isHighlighted = r.name === highlightedName;
-          return (
-            <Path
-              key={`fill-${r.name}`}
-              d={r.d}
-              fill={isHighlighted ? HIGHLIGHT_COLOR : FILL_COLOR}
-              stroke={REGION_STROKE}
-              strokeWidth={0.7}
-              strokeDasharray="2,2"
-              strokeOpacity={0.5}
-            />
-          );
-        })}
-      </G>
+      <AnimatedG transform={transform}>
+        {regionBorders}
+        {regionFills}
+      </AnimatedG>
     </Svg>
   );
 }
