@@ -9,7 +9,8 @@ const AnimatedG = Animated.createAnimatedComponent(G);
 
 const BORDER_COLOR = '#111';
 const FILL_COLOR = '#eef1f3';
-const HIGHLIGHT_COLOR = '#2f6fed';
+const HIGHLIGHT_COLOR = '#4a72b0';
+const HIGHLIGHT_OPACITY = 0.75;
 const REGION_STROKE = '#111';
 
 const ZOOM_DURATION = 100;
@@ -159,6 +160,7 @@ export default function RussiaMap({ highlightedName }) {
             key={`fill-${r.name}`}
             d={r.d}
             fill={isHighlighted ? HIGHLIGHT_COLOR : FILL_COLOR}
+            fillOpacity={isHighlighted ? HIGHLIGHT_OPACITY : 1}
             stroke={REGION_STROKE}
             strokeWidth={0.7}
             strokeDasharray="2,2"
