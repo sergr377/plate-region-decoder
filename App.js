@@ -2,12 +2,15 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+} from 'react-native-safe-area-context';
 import { REGIONS } from './regions';
 import RussiaMap from './RussiaMap';
 
@@ -26,6 +29,14 @@ function getResult(code) {
 }
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
   const [code, setCode] = useState('');
   const { height: windowHeight } = useWindowDimensions();
   const keypadHeight = windowHeight * (3 / 6) * 0.7;
