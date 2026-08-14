@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 import mapData from './russiaMapData.json';
 
 const { width, height, regions } = mapData;
 
+const AnimatedG = Animated.createAnimatedComponent(G);
+
 const BORDER_COLOR = '#111';
 const FILL_COLOR = '#eef1f3';
-const HIGHLIGHT_COLOR = '#2f6fed';
+const HIGHLIGHT_COLOR = '#4a72b0';
+const HIGHLIGHT_OPACITY = 0.75;
 const REGION_STROKE = '#111';
 
 const ZOOM_DURATION = 100;
@@ -98,66 +101,82 @@ function targetFor(region) {
 }
 
 export default function RussiaMap({ highlightedName }) {
-  const progress = useRef(new Animated.Value(1)).current;
-  const currentRef = useRef(IDENTITY);
-  const fromRef = useRef(IDENTITY);
-  const toRef = useRef(IDENTITY);
-  const [transformStr, setTransformStr] = useState('translate(0,0) scale(1)');
-
-  useEffect(() => {
-    const id = progress.addListener(({ value }) => {
-      const f = fromRef.current;
-      const t = toRef.current;
-      const scale = f.scale + (t.scale - f.scale) * value;
-      const tx = f.tx + (t.tx - f.tx) * value;
-      const ty = f.ty + (t.ty - f.ty) * value;
-      currentRef.current = { scale, tx, ty };
-      setTransformStr(`translate(${tx},${ty}) scale(${scale})`);
-    });
-    return () => progress.removeListener(id);
-  }, [progress]);
+  // Each of these drives the AnimatedG's `matrix` prop directly via
+  // setNativeProps, so a zoom animation never triggers a React re-render
+  // (and never re-diffs the region Path list) on any of its frames.
+  // `matrix` (a plain [a, b, c, d, tx, ty] array) is react-native-svg's
+  // own escape-hatch native prop for G — unlike `transform`, it isn't
+  // shadowed by RN's generic view-style transform prop (which expects an
+  // array of {translateX: ...}-style objects and crashes on raw numbers).
+  const scaleAnim = useRef(new Animated.Value(IDENTITY.scale)).current;
+  const txAnim = useRef(new Animated.Value(IDENTITY.tx)).current;
+  const tyAnim = useRef(new Animated.Value(IDENTITY.ty)).current;
 
   useEffect(() => {
     const region = regions.find((r) => r.name === highlightedName);
-    fromRef.current = currentRef.current;
-    toRef.current = targetFor(region);
-    progress.setValue(0);
-    Animated.timing(progress, {
-      toValue: 1,
+    const to = targetFor(region);
+    const config = {
       duration: ZOOM_DURATION,
       easing: Easing.out(Easing.quad),
       useNativeDriver: false,
-    }).start();
-  }, [highlightedName, progress]);
+    };
+    Animated.parallel([
+      Animated.timing(scaleAnim, { toValue: to.scale, ...config }),
+      Animated.timing(txAnim, { toValue: to.tx, ...config }),
+      Animated.timing(tyAnim, { toValue: to.ty, ...config }),
+    ]).start();
+  }, [highlightedName, scaleAnim, txAnim, tyAnim]);
+
+  const matrix = useMemo(
+    () => [scaleAnim, 0, 0, scaleAnim, txAnim, tyAnim],
+    [scaleAnim, txAnim, tyAnim]
+  );
+
+  // Static across the component's lifetime: never depends on highlightedName,
+  // so it's built once and never re-diffed on highlight or zoom changes.
+  const regionBorders = useMemo(
+    () =>
+      regions.map((r) => (
+        <Path
+          key={`border-${r.name}`}
+          d={r.d}
+          fill={BORDER_COLOR}
+          stroke={BORDER_COLOR}
+          strokeWidth={3}
+          strokeLinejoin="round"
+        />
+      )),
+    []
+  );
+
+  // Depends only on highlightedName, so it's recomputed once per code entry
+  // (not per animation frame).
+  const regionFills = useMemo(
+    () =>
+      regions.map((r) => {
+        const isHighlighted = r.name === highlightedName;
+        return (
+          <Path
+            key={`fill-${r.name}`}
+            d={r.d}
+            fill={isHighlighted ? HIGHLIGHT_COLOR : FILL_COLOR}
+            fillOpacity={isHighlighted ? HIGHLIGHT_OPACITY : 1}
+            stroke={REGION_STROKE}
+            strokeWidth={0.7}
+            strokeDasharray="2,2"
+            strokeOpacity={0.5}
+          />
+        );
+      }),
+    [highlightedName]
+  );
 
   return (
     <Svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
-      <G transform={transformStr}>
-        {regions.map((r) => (
-          <Path
-            key={`border-${r.name}`}
-            d={r.d}
-            fill={BORDER_COLOR}
-            stroke={BORDER_COLOR}
-            strokeWidth={3}
-            strokeLinejoin="round"
-          />
-        ))}
-        {regions.map((r) => {
-          const isHighlighted = r.name === highlightedName;
-          return (
-            <Path
-              key={`fill-${r.name}`}
-              d={r.d}
-              fill={isHighlighted ? HIGHLIGHT_COLOR : FILL_COLOR}
-              stroke={REGION_STROKE}
-              strokeWidth={0.7}
-              strokeDasharray="2,2"
-              strokeOpacity={0.5}
-            />
-          );
-        })}
-      </G>
+      <AnimatedG matrix={matrix}>
+        {regionBorders}
+        {regionFills}
+      </AnimatedG>
     </Svg>
   );
 }
