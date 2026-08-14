@@ -100,13 +100,13 @@ function targetFor(region) {
 }
 
 export default function RussiaMap({ highlightedName }) {
-  // Each of these drives the AnimatedG's `transform` prop directly via
+  // Each of these drives the AnimatedG's `matrix` prop directly via
   // setNativeProps, so a zoom animation never triggers a React re-render
   // (and never re-diffs the region Path list) on any of its frames.
-  // react-native-svg's native side expects `transform` as a plain
-  // [a, b, c, d, tx, ty] matrix — never a string — once it's set outside
-  // React's normal render/commit cycle, so we animate the matrix
-  // components directly instead of interpolating an SVG transform string.
+  // `matrix` (a plain [a, b, c, d, tx, ty] array) is react-native-svg's
+  // own escape-hatch native prop for G — unlike `transform`, it isn't
+  // shadowed by RN's generic view-style transform prop (which expects an
+  // array of {translateX: ...}-style objects and crashes on raw numbers).
   const scaleAnim = useRef(new Animated.Value(IDENTITY.scale)).current;
   const txAnim = useRef(new Animated.Value(IDENTITY.tx)).current;
   const tyAnim = useRef(new Animated.Value(IDENTITY.ty)).current;
@@ -126,7 +126,7 @@ export default function RussiaMap({ highlightedName }) {
     ]).start();
   }, [highlightedName, scaleAnim, txAnim, tyAnim]);
 
-  const transform = useMemo(
+  const matrix = useMemo(
     () => [scaleAnim, 0, 0, scaleAnim, txAnim, tyAnim],
     [scaleAnim, txAnim, tyAnim]
   );
@@ -171,7 +171,7 @@ export default function RussiaMap({ highlightedName }) {
 
   return (
     <Svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
-      <AnimatedG transform={transform}>
+      <AnimatedG matrix={matrix}>
         {regionBorders}
         {regionFills}
       </AnimatedG>
