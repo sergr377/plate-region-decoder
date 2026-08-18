@@ -1,6 +1,7 @@
 # Plate Region Decoder
 
 Мобильное приложение на Expo/React Native для быстрой расшифровки кода региона на автомобильных номерах РФ.
+<img width="250" height="500" alt="image" src="https://github.com/user-attachments/assets/086ce83f-ac4e-4ae4-b649-786ecc040ff6" />
 
 ## Как это работает
 
